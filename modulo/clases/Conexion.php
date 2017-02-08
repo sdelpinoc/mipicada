@@ -1,8 +1,8 @@
 <?php
-class Conexion {
+class Conexion extends db_mysqli {
 
     private $_manejador = false;
-    private $_logRuta = DIRECTORIO_RAIZ . SEPARADOR_DIRECTORIO .'logs' . SEPARADOR_DIRECTORIO . 'sql';
+    private $_logRuta = DR .'logs' . DS . 'sql';
 
     public function __construct()
     {
@@ -11,7 +11,11 @@ class Conexion {
 
     public function __destruct()
     {
-        pg_close($this->_manejador);
+        if (BASE_DE_DATOS == 'MYSQL') {
+            $this->_manejador->close();
+        } elseif (BASE_DE_DATOS == 'POSTGRES') {
+            pg_close($this->_manejador);
+        }
     }
 
     public function getConexion()
@@ -23,17 +27,35 @@ class Conexion {
     {
         try {
 
-            $this->_manejador = pg_connect(
-                'host=' . DB_HOST .
-                ' dbname=' . DB_NAME .
-                ' user=' . DB_USER .
-                ' password=' . DB_PASS
-            );
+            switch (BASE_DE_DATOS) {
 
-            if (!$this->_manejador) {
-                throw new Exception('Error en la conexion con la db.', 901);
+                case 'MYSQL':
+                    $this->_manejador = new db_mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
 
+                    if ($this->_manejador === false) {
+                        throw new Exception('Error en la conexion con la db.<br />connect_errno: ' . $this->_manejador->connect_errno . '<br />connect_error: ' . $this->_manejador->connect_error, 901);
+                    }
+                    break;
+
+                case 'POSTGRES':
+                    $this->_manejador = pg_connect(
+                        'host=' . DB_HOST .
+                        ' dbname=' . DB_NAME .
+                        ' user=' . DB_USER .
+                        ' password=' . DB_PASS
+                    );
+
+                    if (!$this->_manejador) {
+                        throw new Exception('Error en la conexion con la db.', 901);
+                    }
+                    break;
+
+                default:
+                    # code...
+                    break;
             }
+
+
         } catch (Exception $e) {
             $this->escribeLog($e);
         }
@@ -41,7 +63,16 @@ class Conexion {
 
     public function escribeLog($texto = '', $ultimaConsulta = '')
     {
-        if (empty($texto)) {
+        if (BASE_DE_DATOS == 'MYSQL') {
+            $texto .= SL;
+            foreach ($this->_manejador->dbErrors as $dbErrors) :
+                foreach ($dbErrors as $key => $value) :
+                    $texto .= $key . ' => ' . $value . SL;
+                endforeach ;
+                $texto .= SL;
+            endforeach ;
+
+        } elseif (BASE_DE_DATOS == 'POSTGRES') {
             $texto = pg_last_error();
         }
 
@@ -49,14 +80,93 @@ class Conexion {
             $texto .= $ultimaConsulta;
         }
 
-        $reg = SALTO_LINEA . date('d-m-Y H:i:s', time()) . ' - ' . $texto . SALTO_LINEA;
+        $reg = date('d-m-Y H:i:s', time()) . ' - ' . SL . $texto . SL;
 
-        $nombre_archivo = ($this->_logRuta . SEPARADOR_DIRECTORIO . date('Ymd', time()) . '.log');
+        $nombre_archivo = ($this->_logRuta . DS . date('Ymd', time()) . '.log');
 
         $arch = fopen($nombre_archivo, 'a');
 
         if ($arch) {
             fwrite($arch, $reg);
         }
+    }
+
+    public function consulta($consulta = '', $aParametros = array())
+    {
+        $_retorna = array(
+            'registrosTotal' => 0,
+            'registros' => array(),
+        );
+
+        try {
+            switch (BASE_DE_DATOS) {
+
+                case 'MYSQL':
+                    // And run a small and simple query
+
+                    print 'consulta: ' . $consulta;
+
+                    $aRes = $this->_manejador->query($consulta);
+                    // print '<pre>';
+                    // print_r($this->_manejador);
+                    // var_dump($aRes);
+                    // exit();
+
+                    $_retorna['registrosTotal'] = $this->_manejador->num_rows;
+
+                    if ($_retorna['registrosTotal'] > 0) {
+                        foreach ($aRes as $reg) {
+                            $_retorna['registros'][] = $reg;
+                        }
+                    } else if (!empty($this->_manejador->dbErrors)) {
+                        print_r($this->_manejador->dbErrors);
+                        throw new Exception('No se pudo ejecutar su consulta', 904);
+                    }
+
+                    break;
+
+                case 'POSTGRES':
+                    $prepare = pg_prepare($this->getConexion(), '', $consulta);
+
+                    if ($prepare) {
+
+                        $aParametrosExecute = array();
+
+                        $execute = pg_execute($this->getConexion(), '', $aParametrosExecute);
+
+                        if ($execute) {
+                            if (is_resource($execute)) {
+
+                                $_retorna['registrosTotal'] = pg_num_rows($execute);
+
+                                if ($_retorna['registrosTotal'] > 0) {
+
+                                    while ($reg = pg_fetch_assoc($execute)) :
+
+                                        $_retorna['registros'][] = $reg;
+
+                                    endwhile ;
+
+                                }
+                            }
+                        } else {
+                            throw new Exception('No se pudo ejecutar su consulta', 903);
+                        }
+                    } else {
+                        throw new Exception('No se pudo preparar su consulta', 902);
+                    }
+                    break;
+
+                default:
+                    # code...
+                    break;
+            }
+
+        } catch (Exception $e) {
+            $this->escribeLog($e->getMessage(), $consulta);
+            // throw $e;
+        }
+
+        return $_retorna;
     }
 }

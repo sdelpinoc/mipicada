@@ -7,17 +7,22 @@ chdir(dirname(__DIR__));
 ini_set('memory_limit', '1500M');
 date_default_timezone_set(@date_default_timezone_get());
 
-define('DIRECTORIO_RAIZ', dirname(__FILE__));
-define('SALTO_LINEA',  "\r\n");
-define('SEPARADOR_DIRECTORIO', DIRECTORY_SEPARATOR);
+define('SL',  "\r\n"); // SALTO_LINEA
+define('DS', DIRECTORY_SEPARATOR); // DIRECTORIO_SEPARADOR
+define('DR', dirname(__FILE__) . DS); // DIRECTORIO_RAIZ
+define('URL', 'http://localhost/mipicada/');
+$proc = TRUE;
 
-require_once __DIR__ . '/modulo/clases/configuracionBD.php';
-require_once __DIR__ . '/modulo/clases/configuracion.php';
+print 'Directorio Raíz(DR): ' . DR;
+print '<hr />';
 
-// require_once __DIR__ . '/modulo/clases/Ayuda.php';
-// require_once __DIR__ . '/modulo/clases/Conexion.php';
+require_once DR . 'modulo/clases/configuracionBD.php';
+require_once DR . 'modulo/configuracion/AutoCarga.php';
 
+configuracion\AutoCarga::iniciar();
 
-require_once 'base.html';
+require_once DR . 'modulo/publico/vista/Plantilla.php';
+
+$aDatos = configuracion\Enrutador::iniciar(new configuracion\Peticion());
 
 ?>

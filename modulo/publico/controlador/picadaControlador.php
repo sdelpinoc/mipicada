@@ -1,9 +1,9 @@
 <?php
 namespace publico;
 
-use Modelo\Picada as Picada;
+use modelo\Picada as Picada;
 
-class indexControlador {
+class picadaControlador {
 
     private $objPicada;
 
@@ -17,8 +17,4 @@ class indexControlador {
         return $this->objPicada->obtieneListado();
     }
 
-    public function error()
-    {
-        return array();
-    }
 }
